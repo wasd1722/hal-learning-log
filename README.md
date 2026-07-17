@@ -5,7 +5,6 @@ STM32F103 HAL 库学习记录，从点灯到 FreeRTOS 迁移。
 ## 环境
 - 芯片：STM32F103C8T6
 - 工具：STM32CubeMX + Keil MDK + ST-Link
-- 调试工具：逻辑分析仪（计划购入）、ST-Link SWO
 - 时钟：HSE 8MHz → PLL 9倍频 → SYSCLK 72MHz
 
 ## 项目演进
@@ -15,8 +14,8 @@ STM32F103 HAL 库学习记录，从点灯到 FreeRTOS 迁移。
 | D1 | [RGB 灯控制](projects/D1_RGB_Blink) | GPIO 输出、共阴极/共阳极 | ✅ 完成 |
 | D2 | [TIM2 定时器中断 RGB](projects/D1_RGB_Blink) | 定时器中断、状态机、标志位设计 | ✅ 完成 |
 | D3 | [串口蓝牙控制 RGB](projects/D1_RGB_Blink) | UART 中断接收、波特率配置、蓝牙通信 | ✅ 完成 |
-| D4 | PWM 呼吸灯 | 定时器 PWM 模式、占空比 | 🔄 待开始 |
-| D5 | ADC 采集 | 模数转换、DMA | ⏳ 计划 |
+| D4 | [PWM 呼吸灯](projects/D1_RGB_Blink) | TIM1 PWM 模式、占空比、人眼非线性 | ✅ 完成 |
+| D5 | ADC 光敏自动调光 | ADC 采集、PWM 联动 | 🔄 待开始 |
 | D6 | FreeRTOS 集成 | 任务调度、信号量、互斥锁 | ⏳ 计划 |
 
 ## 笔记
@@ -26,22 +25,23 @@ STM32F103 HAL 库学习记录，从点灯到 FreeRTOS 迁移。
 | D1 | GPIO 点灯、RGB 控制 | [D1_RGB_Blink.md](docs/D1_RGB_Blink.md) |
 | D2 | TIM2 中断、SWD 踩坑 | [D2_TIM2_RGB.md](docs/D2_TIM2_RGB.md) |
 | D3 | 串口蓝牙、波特率踩坑 | [D3_UART_RGB.md](docs/D3_UART_RGB.md) |
+| D4 | PWM 呼吸灯、MOE 踩坑 | [D4_PWM_Breathe.md](docs/D4_PWM_Breathe.md) |
 
 ## 踩坑记录汇总
 
 | 日期 | 问题 | 解决 | 文档 |
 |------|------|------|------|
-| 2026-07-16 | SWD 引脚复用导致芯片锁死 | Connect Under Reset 恢复 | [D2 文档](docs/D2_TIM2_RGB.md) |
-| 2026-07-16 | 波特率不匹配导致串口乱码 | 改 38400 | [D3 文档](docs/D3_UART_RGB.md) |
+| 2026-07-16 | SWD 引脚复用导致芯片锁死 | Connect Under Reset 恢复 | [D2](docs/D2_TIM2_RGB.md) |
+| 2026-07-16 | 波特率不匹配导致串口乱码 | 改 38400 | [D3](docs/D3_UART_RGB.md) |
+| 2026-07-17 | MOE 主输出使能疑问 | 查 HAL 源码发现自动使能 | [D4](docs/D4_PWM_Breathe.md) |
 
 ## 技能树
 
 - [x] GPIO 输入输出
 - [x] 定时器中断
 - [x] UART 中断通信
-- [ ] PWM 输出
+- [x] PWM 输出
 - [ ] ADC 采集
 - [ ] DMA 传输
 - [ ] FreeRTOS 任务调度
 - [ ] 低功耗模式
-

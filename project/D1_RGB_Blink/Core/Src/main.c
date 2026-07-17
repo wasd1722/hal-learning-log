@@ -40,24 +40,26 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim1;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
-__IO uint8_t flag_tim2 = 0;
-
 __IO uint8_t rx_cmd = 0;
 uint8_t rx_buffer[3];
+
+uint16_t pwm_val = 0;
+uint8_t breathe_dir = 1;
+uint8_t color_state = 0; // 0 红   1 绿   2 蓝
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_TIM2_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -88,14 +90,6 @@ void RGB_SetColor(uint8_t r, uint8_t g, uint8_t b)
 }
 
 
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance == TIM2){;
-		flag_tim2 = 1;
-	}
-	
-}
-
 /* USER CODE END 0 */
 
 /**
@@ -106,7 +100,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-uint8_t color = 0;
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -127,60 +121,60 @@ uint8_t color = 0;
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_TIM2_Init();
   MX_USART2_UART_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim2);
   HAL_UART_Receive_IT(&huart2,rx_buffer,1);
+  HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_2);	
+  HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_4);
+
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	if (rx_cmd != 0)
+	if (breathe_dir)
     {
-        switch (rx_cmd)
+        pwm_val++;
+        if (pwm_val >= 999) breathe_dir = 0;
+    }
+    else
+    {
+        pwm_val--;
+        if (pwm_val == 0)
         {
-            case 'R':
-            case 'r': RGB_SetColor(1,0,0); break;  // 红
-            
-            case 'G':
-            case 'g': RGB_SetColor(0,1,0); break;  // 绿
-            
-            case 'B':
-            case 'b': RGB_SetColor(0,0,1); break;  // 蓝
-            
-            case 'Y':
-            case 'y': RGB_SetColor(1,1,0); break;  // 黄
-            
-            case 'W':
-            case 'w': RGB_SetColor(1,1,1); break;  // 白
-            
-            case 'O':
-            case 'o': RGB_SetColor(0,0,0); break;  // 灭
-            
-            default: break;
+            breathe_dir = 1;
+            color_state++;           // 切换颜色
+            if (color_state > 2) color_state = 0;
         }
-        rx_cmd = 0;  
+    }
+	
+	switch (color_state)
+    {
+        case 0:  // 红
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pwm_val);  // PA11 R
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);         // PA10 G 灭
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);         // PA9  B 灭
+            break;
+            
+        case 1:  // 绿
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);         // PA11 R 灭
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm_val);  // PA10 G
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);         // PA9  B 灭
+            break;
+            
+        case 2:  // 蓝
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);         // PA11 R 灭
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);         // PA10 G 灭
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_val);   // PA9  B
+            break;
     }
 	  
-	if(flag_tim2 == 1){
-		color++;
-		flag_tim2 = 0;
-	}
-	
-	if(color >= 4) color = 1;
-	
-//	switch (color){
-//		case 1:RGB_SetColor(1,0,0);
-//		break;
-//		case 2:RGB_SetColor(0,1,0);       
-//		break;
-//		case 3:RGB_SetColor(0,0,1);
-//		break;
-//		default:break;
-//	}
+    HAL_Delay(2);  // 延时 2ms，控制呼吸速度
+
 	  
     /* USER CODE END WHILE */
 
@@ -229,47 +223,85 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
+  * @brief TIM1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM2_Init(void)
+static void MX_TIM1_Init(void)
 {
 
-  /* USER CODE BEGIN TIM2_Init 0 */
+  /* USER CODE BEGIN TIM1_Init 0 */
 
-  /* USER CODE END TIM2_Init 0 */
+  /* USER CODE END TIM1_Init 0 */
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
-  /* USER CODE BEGIN TIM2_Init 1 */
+  /* USER CODE BEGIN TIM1_Init 1 */
 
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 7199;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 9999;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 71;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 999;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
   }
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM2_Init 2 */
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_LOW;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
 
-  /* USER CODE END TIM2_Init 2 */
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
 
 }
 
@@ -313,7 +345,6 @@ static void MX_USART2_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
@@ -321,16 +352,6 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PA9 PA10 PA11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
