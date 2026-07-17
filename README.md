@@ -5,6 +5,7 @@ STM32F103 HAL 库学习记录，从点灯到 FreeRTOS 迁移。
 ## 环境
 - 芯片：STM32F103C8T6
 - 工具：STM32CubeMX + Keil MDK + ST-Link
+- 调试工具：ST-Link SWO
 - 时钟：HSE 8MHz → PLL 9倍频 → SYSCLK 72MHz
 
 ## 项目演进
