@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -46,13 +47,37 @@ TIM_HandleTypeDef htim1;
 
 UART_HandleTypeDef huart2;
 
+/* Definitions for defaultTask */
+osThreadId_t defaultTaskHandle;
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for ADCTask */
+osThreadId_t ADCTaskHandle;
+const osThreadAttr_t ADCTask_attributes = {
+  .name = "ADCTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for PWMTask */
+osThreadId_t PWMTaskHandle;
+const osThreadAttr_t PWMTask_attributes = {
+  .name = "PWMTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for adcQueue */
+osMessageQueueId_t adcQueueHandle;
+const osMessageQueueAttr_t adcQueue_attributes = {
+  .name = "adcQueue"
+};
 /* USER CODE BEGIN PV */
 
 __IO uint8_t rx_cmd = 0;
 uint8_t rx_buffer[3];
 
-uint32_t adc_value = 0;    // ADC 原始值（0~4095）
-uint16_t pwm_duty = 0;     // PWM 占空比（0~999）
 
 /* USER CODE END PV */
 
@@ -62,6 +87,10 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
+void StartDefaultTask(void *argument);
+void adcTaskFunc(void *argument);
+void pwmTaskFunc(void *argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -138,30 +167,56 @@ int main(void)
   
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of adcQueue */
+  adcQueueHandle = osMessageQueueNew (4, sizeof(uint32_t), &adcQueue_attributes);
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of defaultTask */
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* creation of ADCTask */
+  ADCTaskHandle = osThreadNew(adcTaskFunc, NULL, &ADCTask_attributes);
+
+  /* creation of PWMTask */
+  PWMTaskHandle = osThreadNew(pwmTaskFunc, NULL, &PWMTask_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	adc_value = HAL_ADC_GetValue(&hadc1);
-
-    /* 自动标定：持续追踪 ADC 的最小和最大值 */
-    static uint32_t adc_min = 4095;
-    static uint32_t adc_max = 0;
-    if (adc_value < adc_min) adc_min = adc_value;
-    if (adc_value > adc_max) adc_max = adc_value;
-
-    if (adc_max > adc_min)
-        pwm_duty = (uint16_t)((adc_value - adc_min) * 999 / (adc_max - adc_min));
-    else
-        pwm_duty = 0;
-
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pwm_duty);
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm_duty);
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_duty);
-
-    HAL_Delay(20);
-
-	  
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -401,6 +456,109 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_adcTaskFunc */
+/**
+* @brief Function implementing the ADCTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_adcTaskFunc */
+void adcTaskFunc(void *argument)
+{
+  /* USER CODE BEGIN adcTaskFunc */
+	uint32_t adc_value = 0;    // ADC 原始值（0~4095）
+	uint32_t pwm_duty = 0;     // PWM 占空比（0~999）
+
+    /* 自动标定：持续追踪 ADC 的最小和最大值 */
+    static uint32_t adc_min = 4095;
+    static uint32_t adc_max = 0;
+    
+	
+	
+  /* Infinite loop */
+  for(;;)
+  {
+	adc_value = HAL_ADC_GetValue(&hadc1);
+	if (adc_value < adc_min) adc_min = adc_value;
+    if (adc_value > adc_max) adc_max = adc_value;
+	if (adc_max > adc_min)
+        pwm_duty = (uint16_t)((adc_value - adc_min) * 999 / (adc_max - adc_min));
+    else
+        pwm_duty = 0;
+	osMessageQueuePut(adcQueueHandle,&pwm_duty,0,0);
+    osDelay(20);
+  }
+  /* USER CODE END adcTaskFunc */
+}
+
+/* USER CODE BEGIN Header_pwmTaskFunc */
+/**
+* @brief Function implementing the PWMTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_pwmTaskFunc */
+void pwmTaskFunc(void *argument)
+{
+  /* USER CODE BEGIN pwmTaskFunc */
+	uint32_t pwm = 0;
+	
+	
+	
+  /* Infinite loop */
+  for(;;)
+  {
+	
+	
+
+	osMessageQueueGet(adcQueueHandle, &pwm, NULL, osWaitForever);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pwm);
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm);
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm);
+  }
+  /* USER CODE END pwmTaskFunc */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM4 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM4)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
